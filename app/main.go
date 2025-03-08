@@ -32,19 +32,17 @@ func dbinfo(dbFile *os.File) {
 
 	pageHeaders := parsePageHeaders(dbFile)
 
-	// pageHeaders.StartOfCellsContent
 	dbFile.Seek(int64(pageHeaders.StartOfCellsContent), 0)
 
-	cell := parseCell(dbFile)
-	fmt.Println("First cell:")
-	fmt.Println(cell)
-	cell = parseCell(dbFile)
-	fmt.Println("Second cell:")
-	fmt.Println(cell)
-	cell = parseCell(dbFile)
-	fmt.Println("Third cell:")
-	fmt.Println(cell)
+	numberOfTables := 0
+
+	for i := 0; i < int(pageHeaders.NumberOfCells); i++ {
+		cell := parseCell(dbFile)
+		if cell.Type == "table" {
+			numberOfTables++
+		}
+	}
 
 	fmt.Printf("database page size: %v\n", headers.PageSize)
-	fmt.Printf("number of tables: %v\n", pageHeaders.NumberOfCells)
+	fmt.Printf("number of tables: %v\n", numberOfTables)
 }

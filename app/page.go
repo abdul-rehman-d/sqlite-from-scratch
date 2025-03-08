@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"io"
 )
 
@@ -22,18 +21,15 @@ func parseCell(reader io.Reader) SchemaCell {
 	typeSize := normalizeOrSomething(parseUint8(reader))
 	nameSize := normalizeOrSomething(parseUint8(reader))
 	tableNameSize := normalizeOrSomething(parseUint8(reader))
-	rootPage := normalizeOrSomething(parseUint8(reader))
+	_ = normalizeOrSomething(parseUint8(reader)) // rootPageSize
 
 	// rest of record header is sql
 	sqlSize := 0
 	for i := 0; i < int(recordHeaderSize)-5; i++ {
 		t := int(parseUint8(reader))
-		fmt.Println("t", t)
 		sqlSize += t
 	}
-	fmt.Println("sqlSize", sqlSize)
 	sqlSize = normalizeOrSomethingInt(sqlSize)
-	fmt.Println("sqlSize", sqlSize)
 
 	// read the actual values
 	typeBytes := make([]byte, typeSize)
@@ -42,10 +38,9 @@ func parseCell(reader io.Reader) SchemaCell {
 	reader.Read(nameBytes)
 	tableNameBytes := make([]byte, tableNameSize)
 	reader.Read(tableNameBytes)
+	rootPage := parseUint8(reader)
 	sqlBytes := make([]byte, sqlSize)
 	reader.Read(sqlBytes)
-
-	fmt.Println(len(sqlBytes) == sqlSize, len(string(sqlBytes)), string(sqlBytes))
 
 	return SchemaCell{
 		PayloadSize: payloadSize,
@@ -59,7 +54,7 @@ func parseCell(reader io.Reader) SchemaCell {
 
 func normalizeOrSomethingInt(size int) int {
 	if size > 13 {
-		size -= 12
+		size -= 13
 		size = size / 2
 	}
 	return size
@@ -67,7 +62,7 @@ func normalizeOrSomethingInt(size int) int {
 
 func normalizeOrSomething(size byte) byte {
 	if size > 13 {
-		size -= 12
+		size -= 13
 		size = size / 2
 	}
 	return size

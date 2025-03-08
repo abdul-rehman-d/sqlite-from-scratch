@@ -155,8 +155,12 @@ func executeSQL(databaseFile *os.File, command string) {
 		databaseFile.Seek(int64(cellAddress), 1)
 		cell := parseCell(databaseFile)
 
-		for _, i := range indices {
-			fmt.Println(cell.Columns[i])
+		for i, idx := range indices {
+			fmt.Print(cell.Columns[idx])
+			if i != len(indices)-1 {
+				fmt.Print("|")
+			}
 		}
+		fmt.Print("\n")
 	}
 }

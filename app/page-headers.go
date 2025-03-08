@@ -19,6 +19,7 @@ type PageHeaders struct {
 	FreeblockOffset     uint16
 	NumberOfCells       uint16
 	StartOfCellsContent uint16
+	CellAddresses       []uint16
 }
 
 func parsePageHeaders(reader io.Reader) PageHeaders {
@@ -33,10 +34,17 @@ func parsePageHeaders(reader io.Reader) PageHeaders {
 		log.Fatal("Page type is not LeafTablePageType")
 	}
 
+	cellAddresses := make([]uint16, numberOfCells)
+
+	for i := 0; i < int(numberOfCells); i++ {
+		cellAddresses[i] = parseUint16(reader)
+	}
+
 	return PageHeaders{
 		Type:                pageType,
 		FreeblockOffset:     freeblockOffset,
 		NumberOfCells:       numberOfCells,
 		StartOfCellsContent: startOfCellsContent,
+		CellAddresses:       cellAddresses,
 	}
 }

@@ -5,7 +5,7 @@ import (
 )
 
 type SchemaCell struct {
-	PayloadSize byte
+	PayloadSize uint16
 	Type        string
 	Name        string
 	TableName   string
@@ -13,8 +13,15 @@ type SchemaCell struct {
 	SQL         string
 }
 
-func parseCell(reader io.Reader) SchemaCell {
-	payloadSize := parseUint8(reader)
+func parseSchemaCell(reader io.Reader) SchemaCell {
+	payloadSize := uint16(parseUint8(reader))
+
+	if payloadSize > 127 {
+		next := parseUint8(reader)
+		payloadSize += uint16(next)
+
+	}
+
 	_ = parseUint8(reader) // rowId skip
 
 	recordHeaderSize := parseUint8(reader)
@@ -49,6 +56,43 @@ func parseCell(reader io.Reader) SchemaCell {
 		TableName:   string(tableNameBytes),
 		RootPage:    rootPage,
 		SQL:         string(sqlBytes),
+	}
+}
+
+type Cell struct {
+	PayloadSize uint16
+	RowID       byte
+	Columns     []string
+}
+
+func parseCell(reader io.Reader) Cell {
+	payloadSize := uint16(parseUint8(reader))
+	if payloadSize > 127 {
+		next := parseUint8(reader)
+		payloadSize += uint16(next)
+
+	}
+	rowId := parseUint8(reader)
+
+	recordHeaderSize := parseUint8(reader)
+
+	sizes := make([]byte, recordHeaderSize-1)
+	for i := 0; i < int(recordHeaderSize)-1; i++ {
+		sizes[i] = normalizeOrSomething(parseUint8(reader))
+	}
+
+	columns := make([]string, recordHeaderSize-1)
+
+	for i, size := range sizes {
+		data := make([]byte, size)
+		reader.Read(data)
+		columns[i] = string(data)
+	}
+
+	return Cell{
+		PayloadSize: payloadSize,
+		RowID:       rowId,
+		Columns:     columns,
 	}
 }
 

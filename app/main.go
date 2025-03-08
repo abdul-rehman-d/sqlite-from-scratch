@@ -5,8 +5,8 @@ import (
 	"log"
 	"os"
 	"strings"
-	// Available if you need it!
-	// "github.com/xwb1989/sqlparser"
+
+	"github.com/xwb1989/sqlparser"
 )
 
 func main() {
@@ -50,7 +50,8 @@ func dbinfo(dbFile *os.File) {
 
 	for _, cellAddress := range pageHeaders.CellAddresses {
 		dbFile.Seek(int64(cellAddress), 0)
-		cell := parseCell(dbFile)
+		cell := parseSchemaCell(dbFile)
+
 		if cell.Type == "table" {
 			numberOfTables++
 		}
@@ -69,7 +70,7 @@ func tables(dbFile *os.File) {
 
 	for _, cellAddress := range pageHeaders.CellAddresses {
 		dbFile.Seek(int64(cellAddress), 0)
-		cell := parseCell(dbFile)
+		cell := parseSchemaCell(dbFile)
 		if cell.Type == "table" {
 			if flag {
 				fmt.Printf(" ")
@@ -81,14 +82,20 @@ func tables(dbFile *os.File) {
 }
 
 func executeSQL(databaseFile *os.File, command string) {
-	// count command
-	splitCommand := strings.Split(command, " ")
-	lastWord := splitCommand[len(splitCommand)-1]
-	if lastWord[len(lastWord)-1] == ';' {
-		lastWord = lastWord[:len(lastWord)-1]
+	stmt, err := sqlparser.Parse(command)
+	if err != nil {
+		log.Fatal(err)
 	}
 
-	tableName := lastWord
+	if _, ok := stmt.(*sqlparser.Select); !ok {
+		log.Fatal("no commands but `select` is supported yet")
+	}
+
+	params, err := parseSelectStatement(stmt)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	headers := parseDBHeaders(databaseFile)
 
 	pageHeaders := parsePageHeaders(databaseFile)
@@ -98,15 +105,23 @@ func executeSQL(databaseFile *os.File, command string) {
 
 	for _, cellAddress := range pageHeaders.CellAddresses {
 		databaseFile.Seek(int64(cellAddress), 0)
-		cell := parseCell(databaseFile)
-		if cell.Type == "table" && cell.TableName == tableName {
+		test := make([]byte, 20)
+		databaseFile.Read(test)
+
+		databaseFile.Seek(int64(cellAddress), 0)
+		cell := parseSchemaCell(databaseFile)
+		if cell.Type == "table" && cell.TableName == params.TableName {
 			tableCell = cell
 			found = true
 		}
 	}
 	if !found {
-		fmt.Println("Table not found")
-		os.Exit(1)
+		log.Fatal("Table not found")
+	}
+
+	tableSchema, err := parseTableSchema(tableCell.SQL)
+	if err != nil {
+		log.Fatal(err)
 	}
 
 	offset := (uint16(tableCell.RootPage) - 1) * headers.PageSize
@@ -114,5 +129,34 @@ func executeSQL(databaseFile *os.File, command string) {
 	databaseFile.Seek(int64(offset), 0)
 
 	tablePageHeaders := parsePageHeaders(databaseFile)
-	fmt.Println(tablePageHeaders.NumberOfCells)
+
+	if len(params.Columns) > 0 && len(params.Columns[0]) >= 5 && strings.ToLower(params.Columns[0][0:5]) == "count" {
+		fmt.Println(tablePageHeaders.NumberOfCells)
+		return
+	}
+
+	indices := make([]int, len(params.Columns))
+	for i, column := range params.Columns {
+		found := false
+		for j, col := range tableSchema.Columns {
+			if col.Name == column {
+				found = true
+				indices[i] = j
+				break
+			}
+		}
+		if !found {
+			log.Fatalf("column not found: %s\n", column)
+		}
+	}
+
+	for _, cellAddress := range tablePageHeaders.CellAddresses {
+		databaseFile.Seek(int64(offset), 0)
+		databaseFile.Seek(int64(cellAddress), 1)
+		cell := parseCell(databaseFile)
+
+		for _, i := range indices {
+			fmt.Println(cell.Columns[i])
+		}
+	}
 }

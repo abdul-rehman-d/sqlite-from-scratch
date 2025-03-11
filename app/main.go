@@ -153,6 +153,21 @@ func executeSQL(databaseFile *os.File, command string) {
 		databaseFile.Seek(int64(cellAddress), 1)
 		cell := parseCell(databaseFile, *tableSchema)
 
+		skip := false
+
+		for _, where := range params.Where {
+			val := cell.Columns[where.ColumnName]
+			if !compareByteArrays(val, where.ValueToCompare) {
+				skip = true
+				break
+
+			}
+		}
+
+		if skip {
+			continue
+		}
+
 		for i, col := range params.Columns {
 			fmt.Print(string(cell.Columns[col]))
 			if i != len(params.Columns)-1 {

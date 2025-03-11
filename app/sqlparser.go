@@ -3,13 +3,21 @@ package main
 import (
 	"fmt"
 	"regexp"
+	"strings"
 
 	"github.com/xwb1989/sqlparser"
 )
 
+type Where struct {
+	ColumnName     string
+	ValueToCompare []byte
+	Operator       string
+}
+
 type SelectStatementResult struct {
 	TableName string
 	Columns   []string
+	Where     []Where
 }
 
 func parseSelectStatement(stmt sqlparser.Statement) (*SelectStatementResult, error) {
@@ -41,9 +49,42 @@ func parseSelectStatement(stmt sqlparser.Statement) (*SelectStatementResult, err
 		}
 	}
 
+	wheres := []Where{}
+
+	if selectStmt.Where != nil {
+		compare, ok := selectStmt.Where.Expr.(*sqlparser.ComparisonExpr)
+		if !ok {
+			return nil, fmt.Errorf("can only do comparison rn")
+		}
+		where := Where{}
+		if val, ok := extractSQLLiteralValue(compare.Left); ok {
+			where.ValueToCompare = val
+		} else {
+			where.ColumnName = sqlparser.String(compare.Left)
+		}
+		if val, ok := extractSQLLiteralValue(compare.Right); ok {
+			if where.ValueToCompare != nil {
+				return nil, fmt.Errorf("only column to value compare allowed")
+			}
+			where.ValueToCompare = val
+		} else {
+			if len(where.ColumnName) > 0 {
+				return nil, fmt.Errorf("only column to value compare allowed")
+			}
+			where.ColumnName = strings.ToLower(sqlparser.String(compare.Left))
+		}
+
+		if compare.Operator != "=" {
+			return nil, fmt.Errorf("only = operator allowed")
+		}
+
+		wheres = append(wheres, where)
+	}
+
 	return &SelectStatementResult{
 		TableName: tableNameOut,
 		Columns:   columns,
+		Where:     wheres,
 	}, nil
 }
 
@@ -88,4 +129,11 @@ func parseTableSchema(query string) (*TableSchema, error) {
 func preprocessSQL(sql string) string {
 	re := regexp.MustCompile(`(?i)\bautoincrement\b`) // Match 'AUTOINCREMENT' case-insensitively
 	return re.ReplaceAllString(sql, "")
+}
+
+func extractSQLLiteralValue(expr sqlparser.Expr) ([]byte, bool) {
+	if sqlVal, ok := expr.(*sqlparser.SQLVal); ok {
+		return sqlVal.Val, true
+	}
+	return nil, false
 }

@@ -104,7 +104,8 @@ type TableSchema struct {
 }
 
 func parseTableSchema(query string) (*TableSchema, error) {
-	stmt, err := sqlparser.Parse(preprocessSQL(query))
+	query = preprocessSQL(query)
+	stmt, err := sqlparser.Parse(query)
 	if err != nil {
 		return nil, err
 	}
@@ -132,8 +133,13 @@ func parseTableSchema(query string) (*TableSchema, error) {
 }
 
 func preprocessSQL(sql string) string {
-	re := regexp.MustCompile(`(?i)\bautoincrement\b`) // Match 'AUTOINCREMENT' case-insensitively
-	return re.ReplaceAllString(sql, "")
+	reAutoInc := regexp.MustCompile(`(?i)\b autoincrement\b`)
+	sql = reAutoInc.ReplaceAllString(sql, "")
+
+	reDoubleQuotes := regexp.MustCompile(`"([^"]+)"`) // Match `"table_name"` and replace with `table_name`
+	sql = reDoubleQuotes.ReplaceAllString(sql, "`$1`")
+
+	return sql
 }
 
 func extractSQLLiteralValue(expr sqlparser.Expr) ([]byte, bool) {

@@ -39,6 +39,12 @@ func parseSchemaCell(reader io.Reader) SchemaCell {
 	}
 	sqlSize = normalizeOrSomethingInt(sqlSize)
 
+	actualSqlSize := int(payloadSize) - (1 + int(recordHeaderSize) + int(typeSize) + int(nameSize) + int(tableNameSize) + 1)
+
+	if actualSqlSize > sqlSize {
+		sqlSize = actualSqlSize
+	}
+
 	// read the actual values
 	typeBytes := make([]byte, typeSize)
 	reader.Read(typeBytes)

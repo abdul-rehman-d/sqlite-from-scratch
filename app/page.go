@@ -2,6 +2,7 @@ package main
 
 import (
 	"io"
+	"log"
 )
 
 type SchemaCell struct {
@@ -62,10 +63,10 @@ func parseSchemaCell(reader io.Reader) SchemaCell {
 type Cell struct {
 	PayloadSize uint16
 	RowID       byte
-	Columns     []string
+	Columns     map[string][]byte
 }
 
-func parseCell(reader io.Reader) Cell {
+func parseCell(reader io.Reader, table TableSchema) Cell {
 	payloadSize := uint16(parseUint8(reader))
 	if payloadSize > 127 {
 		next := parseUint8(reader)
@@ -81,12 +82,16 @@ func parseCell(reader io.Reader) Cell {
 		sizes[i] = normalizeOrSomething(parseUint8(reader))
 	}
 
-	columns := make([]string, recordHeaderSize-1)
+	columns := make(map[string][]byte, recordHeaderSize-1)
+
+	if len(table.Columns) != len(sizes) {
+		log.Fatal("not one to one in row to columns")
+	}
 
 	for i, size := range sizes {
 		data := make([]byte, size)
 		reader.Read(data)
-		columns[i] = string(data)
+		columns[table.Columns[i].Name] = data
 	}
 
 	return Cell{

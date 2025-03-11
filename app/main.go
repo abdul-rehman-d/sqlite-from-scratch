@@ -135,13 +135,11 @@ func executeSQL(databaseFile *os.File, command string) {
 		return
 	}
 
-	indices := make([]int, len(params.Columns))
-	for i, column := range params.Columns {
+	for _, column := range params.Columns {
 		found := false
-		for j, col := range tableSchema.Columns {
-			if col.Name == column {
+		for _, col := range tableSchema.Columns {
+			if col.Name == strings.ToLower(column) {
 				found = true
-				indices[i] = j
 				break
 			}
 		}
@@ -153,11 +151,11 @@ func executeSQL(databaseFile *os.File, command string) {
 	for _, cellAddress := range tablePageHeaders.CellAddresses {
 		databaseFile.Seek(int64(offset), 0)
 		databaseFile.Seek(int64(cellAddress), 1)
-		cell := parseCell(databaseFile)
+		cell := parseCell(databaseFile, *tableSchema)
 
-		for i, idx := range indices {
-			fmt.Print(cell.Columns[idx])
-			if i != len(indices)-1 {
+		for i, col := range params.Columns {
+			fmt.Print(string(cell.Columns[col]))
+			if i != len(params.Columns)-1 {
 				fmt.Print("|")
 			}
 		}

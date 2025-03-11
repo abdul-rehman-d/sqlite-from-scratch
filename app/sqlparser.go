@@ -74,7 +74,7 @@ func parseTableSchema(query string) (*TableSchema, error) {
 
 	for _, col := range ddlStmt.TableSpec.Columns {
 		columns = append(columns, Column{
-			Name: col.Name.String(),
+			Name: strings.ToLower(col.Name.String()),
 			Type: col.Type.Type,
 		})
 	}

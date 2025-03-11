@@ -135,16 +135,18 @@ func executeSQL(databaseFile *os.File, command string) {
 		return
 	}
 
-	for _, column := range params.Columns {
-		found := false
-		for _, col := range tableSchema.Columns {
-			if col.Name == strings.ToLower(column) {
-				found = true
-				break
+	if !params.AllColumns {
+		for _, column := range params.Columns {
+			found := false
+			for _, col := range tableSchema.Columns {
+				if col.Name == strings.ToLower(column) {
+					found = true
+					break
+				}
 			}
-		}
-		if !found {
-			log.Fatalf("column not found: %s\n", column)
+			if !found {
+				log.Fatalf("column not found: %s\n", column)
+			}
 		}
 	}
 
@@ -168,10 +170,19 @@ func executeSQL(databaseFile *os.File, command string) {
 			continue
 		}
 
-		for i, col := range params.Columns {
-			fmt.Print(string(cell.Columns[col]))
-			if i != len(params.Columns)-1 {
-				fmt.Print("|")
+		if params.AllColumns {
+			for i, col := range tableSchema.Columns {
+				fmt.Print(string(cell.Columns[col.Name]))
+				if i != len(tableSchema.Columns)-1 {
+					fmt.Print("|")
+				}
+			}
+		} else {
+			for i, col := range params.Columns {
+				fmt.Print(string(cell.Columns[col]))
+				if i != len(params.Columns)-1 {
+					fmt.Print("|")
+				}
 			}
 		}
 		fmt.Print("\n")

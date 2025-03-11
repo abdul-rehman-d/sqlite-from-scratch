@@ -15,15 +15,17 @@ type Where struct {
 }
 
 type SelectStatementResult struct {
-	TableName string
-	Columns   []string
-	Where     []Where
+	TableName  string
+	Columns    []string
+	AllColumns bool
+	Where      []Where
 }
 
 func parseSelectStatement(stmt sqlparser.Statement) (*SelectStatementResult, error) {
 	tableNameOut := ""
 
 	columns := []string{}
+	allColumns := false
 
 	selectStmt, ok := stmt.(*sqlparser.Select)
 	if !ok {
@@ -32,6 +34,8 @@ func parseSelectStatement(stmt sqlparser.Statement) (*SelectStatementResult, err
 	for _, expr := range selectStmt.SelectExprs {
 		if col, ok := expr.(*sqlparser.AliasedExpr); ok {
 			columns = append(columns, sqlparser.String(col.Expr))
+		} else if _, ok := expr.(*sqlparser.StarExpr); ok {
+			allColumns = true
 		} else {
 			return nil, fmt.Errorf("could not extract columns from select statement")
 		}
@@ -82,9 +86,10 @@ func parseSelectStatement(stmt sqlparser.Statement) (*SelectStatementResult, err
 	}
 
 	return &SelectStatementResult{
-		TableName: tableNameOut,
-		Columns:   columns,
-		Where:     wheres,
+		TableName:  tableNameOut,
+		Columns:    columns,
+		AllColumns: allColumns,
+		Where:      wheres,
 	}, nil
 }
 

@@ -86,6 +86,8 @@ type Database struct {
 	Headers     DBHeaders
 	Params      *SelectStatementResult
 	TableSchema *TableSchema
+	CountOnly   bool
+	Count       uint64
 }
 
 func executeSQL(databaseFile *os.File, command string) {
@@ -106,6 +108,8 @@ func executeSQL(databaseFile *os.File, command string) {
 	headers := parseDBHeaders(databaseFile)
 
 	pageHeaders := parsePageHeaders(databaseFile)
+
+	countOnly := false
 
 	found := false
 	tableCell := SchemaCell{}
@@ -131,7 +135,9 @@ func executeSQL(databaseFile *os.File, command string) {
 		log.Fatal(err)
 	}
 
-	if err := validateAllColumnNames(params, tableSchema); err != nil {
+	if len(params.Columns) > 0 && len(params.Columns[0]) >= 5 && strings.ToLower(params.Columns[0][0:5]) == "count" {
+		countOnly = true
+	} else if err := validateAllColumnNames(params, tableSchema); err != nil {
 		log.Fatal(err)
 	}
 
@@ -140,12 +146,18 @@ func executeSQL(databaseFile *os.File, command string) {
 		Headers:     headers,
 		Params:      params,
 		TableSchema: tableSchema,
+		CountOnly:   countOnly,
+		Count:       uint64(0),
 	}
 
 	db.ParsePage(int64(tableCell.RootPage))
+
+	if countOnly {
+		fmt.Println(db.Count)
+	}
 }
 
-func (db Database) ParsePage(pageNumber int64) {
+func (db *Database) ParsePage(pageNumber int64) {
 	offset := (int64(pageNumber) - 1) * int64(db.Headers.PageSize)
 
 	db.File.Seek(offset, 0)
@@ -167,7 +179,7 @@ func (db Database) ParsePage(pageNumber int64) {
 			db.File.Seek(int64(cellAddress), 1)
 			cell := parseCell(db.File, *db.TableSchema)
 
-			filterAndPrintCell(cell, db.Params, db.TableSchema)
+			db.FilterAndPrintCell(cell)
 		}
 	}
 }
@@ -191,10 +203,10 @@ func validateAllColumnNames(params *SelectStatementResult, tableSchema *TableSch
 	return nil
 }
 
-func filterAndPrintCell(cell Cell, params *SelectStatementResult, tableSchema *TableSchema) {
+func (db *Database) FilterAndPrintCell(cell Cell) {
 	skip := false
 
-	for _, where := range params.Where {
+	for _, where := range db.Params.Where {
 		val := cell.Columns[where.ColumnName]
 		if !compareByteArrays(val, where.ValueToCompare) {
 			skip = true
@@ -207,17 +219,23 @@ func filterAndPrintCell(cell Cell, params *SelectStatementResult, tableSchema *T
 		return
 	}
 
-	if params.AllColumns {
-		for i, col := range tableSchema.Columns {
+	db.Count++
+
+	if db.CountOnly {
+		return
+	}
+
+	if db.Params.AllColumns {
+		for i, col := range db.TableSchema.Columns {
 			fmt.Print(string(cell.Columns[col.Name]))
-			if i != len(tableSchema.Columns)-1 {
+			if i != len(db.TableSchema.Columns)-1 {
 				fmt.Print("|")
 			}
 		}
 	} else {
-		for i, col := range params.Columns {
+		for i, col := range db.Params.Columns {
 			fmt.Print(string(cell.Columns[col]))
-			if i != len(params.Columns)-1 {
+			if i != len(db.Params.Columns)-1 {
 				fmt.Print("|")
 			}
 		}

@@ -94,8 +94,9 @@ func parseSelectStatement(stmt sqlparser.Statement) (*SelectStatementResult, err
 }
 
 type Column struct {
-	Name string
-	Type string
+	Name    string
+	Type    string
+	IsRowId bool
 }
 
 type TableSchema struct {
@@ -121,8 +122,9 @@ func parseTableSchema(query string) (*TableSchema, error) {
 
 	for _, col := range ddlStmt.TableSpec.Columns {
 		columns = append(columns, Column{
-			Name: strings.ToLower(col.Name.String()),
-			Type: col.Type.Type,
+			Name:    strings.ToLower(col.Name.String()),
+			Type:    col.Type.Type,
+			IsRowId: col.Type.KeyOpt == 1 && col.Type.Type == "integer",
 		})
 	}
 

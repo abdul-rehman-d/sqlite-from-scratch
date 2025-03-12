@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"io"
 	"log"
 )
@@ -84,9 +85,36 @@ func readCellHeaderValue(reader io.Reader) int {
 	return out
 }
 
+func ReadVarint(r io.Reader) uint64 {
+	var result uint64
+
+	for i := 0; i < 9; i++ { // SQLite varints are at most 9 bytes
+		// Read a single byte
+		buf := make([]byte, 1)
+		r.Read(buf)
+
+		b := buf[0]
+
+		// Extract lower 7 bits and shift into place
+		if i == 8 { // Last byte (9th byte) stores full 8 bits
+			result = (result << 8) | uint64(b)
+			break
+		} else {
+			result = (result << 7) | uint64(b&0x7F)
+		}
+
+		// If MSB is 0, stop reading (this was the last byte)
+		if b&0x80 == 0 {
+			break
+		}
+	}
+
+	return result
+}
+
 func parseCell(reader io.Reader, table TableSchema) Cell {
 	payloadSize := readCellHeaderValue(reader)
-	rowId := readCellHeaderValue(reader)
+	rowId := int(ReadVarint(reader))
 
 	recordHeaderSize := parseUint8(reader)
 
@@ -105,6 +133,10 @@ func parseCell(reader io.Reader, table TableSchema) Cell {
 		data := make([]byte, size)
 		reader.Read(data)
 		columns[table.Columns[i].Name] = data
+
+		if table.Columns[i].IsRowId {
+			columns[table.Columns[i].Name] = []byte(fmt.Sprintf("%d", rowId))
+		}
 	}
 
 	return Cell{

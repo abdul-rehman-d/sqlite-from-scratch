@@ -81,6 +81,13 @@ func tables(dbFile *os.File) {
 	}
 }
 
+type Database struct {
+	File        *os.File
+	Headers     DBHeaders
+	Params      *SelectStatementResult
+	TableSchema *TableSchema
+}
+
 func executeSQL(databaseFile *os.File, command string) {
 	stmt, err := sqlparser.Parse(command)
 	if err != nil {
@@ -124,67 +131,96 @@ func executeSQL(databaseFile *os.File, command string) {
 		log.Fatal(err)
 	}
 
-	offset := (uint16(tableCell.RootPage) - 1) * headers.PageSize
+	if err := validateAllColumnNames(params, tableSchema); err != nil {
+		log.Fatal(err)
+	}
 
-	databaseFile.Seek(int64(offset), 0)
+	db := Database{
+		File:        databaseFile,
+		Headers:     headers,
+		Params:      params,
+		TableSchema: tableSchema,
+	}
 
-	tablePageHeaders := parsePageHeaders(databaseFile)
+	db.ParsePage(int64(tableCell.RootPage))
+}
 
-	if len(params.Columns) > 0 && len(params.Columns[0]) >= 5 && strings.ToLower(params.Columns[0][0:5]) == "count" {
-		fmt.Println(tablePageHeaders.NumberOfCells)
+func (db Database) ParsePage(pageNumber int64) {
+	offset := (int64(pageNumber) - 1) * int64(db.Headers.PageSize)
+
+	db.File.Seek(offset, 0)
+	pageHeaders := parsePageHeaders(db.File)
+
+	switch pageHeaders.Type {
+	case InteriorTablePageType:
+		for _, pageCellAddress := range pageHeaders.CellAddresses {
+			db.File.Seek(int64(offset), 0)
+			db.File.Seek(int64(pageCellAddress), 1)
+			pageCell := parseInteriorTableCell(db.File)
+
+			db.ParsePage(int64(pageCell.PageNumber))
+		}
+		db.ParsePage(int64(pageHeaders.RightMostPageNumber))
+	case LeafTablePageType:
+		for _, cellAddress := range pageHeaders.CellAddresses {
+			db.File.Seek(int64(offset), 0)
+			db.File.Seek(int64(cellAddress), 1)
+			cell := parseCell(db.File, *db.TableSchema)
+
+			filterAndPrintCell(cell, db.Params, db.TableSchema)
+		}
+	}
+}
+
+func validateAllColumnNames(params *SelectStatementResult, tableSchema *TableSchema) error {
+	if params.AllColumns {
+		return nil
+	}
+	for _, column := range params.Columns {
+		found := false
+		for _, col := range tableSchema.Columns {
+			if col.Name == strings.ToLower(column) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return fmt.Errorf("column not found: %s\n", column)
+		}
+	}
+	return nil
+}
+
+func filterAndPrintCell(cell Cell, params *SelectStatementResult, tableSchema *TableSchema) {
+	skip := false
+
+	for _, where := range params.Where {
+		val := cell.Columns[where.ColumnName]
+		if !compareByteArrays(val, where.ValueToCompare) {
+			skip = true
+			break
+
+		}
+	}
+
+	if skip {
 		return
 	}
 
-	if !params.AllColumns {
-		for _, column := range params.Columns {
-			found := false
-			for _, col := range tableSchema.Columns {
-				if col.Name == strings.ToLower(column) {
-					found = true
-					break
-				}
+	if params.AllColumns {
+		for i, col := range tableSchema.Columns {
+			fmt.Print(string(cell.Columns[col.Name]))
+			if i != len(tableSchema.Columns)-1 {
+				fmt.Print("|")
 			}
-			if !found {
-				log.Fatalf("column not found: %s\n", column)
+		}
+	} else {
+		for i, col := range params.Columns {
+			fmt.Print(string(cell.Columns[col]))
+			if i != len(params.Columns)-1 {
+				fmt.Print("|")
 			}
 		}
 	}
-
-	for _, cellAddress := range tablePageHeaders.CellAddresses {
-		databaseFile.Seek(int64(offset), 0)
-		databaseFile.Seek(int64(cellAddress), 1)
-		cell := parseCell(databaseFile, *tableSchema)
-
-		skip := false
-
-		for _, where := range params.Where {
-			val := cell.Columns[where.ColumnName]
-			if !compareByteArrays(val, where.ValueToCompare) {
-				skip = true
-				break
-
-			}
-		}
-
-		if skip {
-			continue
-		}
-
-		if params.AllColumns {
-			for i, col := range tableSchema.Columns {
-				fmt.Print(string(cell.Columns[col.Name]))
-				if i != len(tableSchema.Columns)-1 {
-					fmt.Print("|")
-				}
-			}
-		} else {
-			for i, col := range params.Columns {
-				fmt.Print(string(cell.Columns[col]))
-				if i != len(params.Columns)-1 {
-					fmt.Print("|")
-				}
-			}
-		}
-		fmt.Print("\n")
-	}
+	fmt.Print("\n")
 }

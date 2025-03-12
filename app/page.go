@@ -67,19 +67,26 @@ func parseSchemaCell(reader io.Reader) SchemaCell {
 }
 
 type Cell struct {
-	PayloadSize uint16
-	RowID       byte
+	PayloadSize int
+	RowID       int
 	Columns     map[string][]byte
 }
 
-func parseCell(reader io.Reader, table TableSchema) Cell {
-	payloadSize := uint16(parseUint8(reader))
-	if payloadSize > 127 {
+func readCellHeaderValue(reader io.Reader) int {
+	out := 0
+	for {
 		next := parseUint8(reader)
-		payloadSize += uint16(next)
-
+		out += int(next)
+		if next <= 127 {
+			break
+		}
 	}
-	rowId := parseUint8(reader)
+	return out
+}
+
+func parseCell(reader io.Reader, table TableSchema) Cell {
+	payloadSize := readCellHeaderValue(reader)
+	rowId := readCellHeaderValue(reader)
 
 	recordHeaderSize := parseUint8(reader)
 
@@ -104,6 +111,18 @@ func parseCell(reader io.Reader, table TableSchema) Cell {
 		PayloadSize: payloadSize,
 		RowID:       rowId,
 		Columns:     columns,
+	}
+}
+
+type InteriorTablePointerCell struct {
+	PageNumber uint32
+	RowID      uint16
+}
+
+func parseInteriorTableCell(reader io.Reader) InteriorTablePointerCell {
+	return InteriorTablePointerCell{
+		PageNumber: parseUint32(reader),
+		RowID:      parseUint16(reader),
 	}
 }
 

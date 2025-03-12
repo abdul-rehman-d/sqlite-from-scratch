@@ -20,9 +20,12 @@ type PageHeaders struct {
 	NumberOfCells       uint16
 	StartOfCellsContent uint16
 	CellAddresses       []uint16
+	RightMostPageNumber uint32
 }
 
 func parsePageHeaders(reader io.Reader) PageHeaders {
+	rightMostPageNumber := uint32(0)
+
 	pageType := parseUint8(reader)
 	freeblockOffset := parseUint16(reader)
 	numberOfCells := parseUint16(reader)
@@ -30,8 +33,12 @@ func parsePageHeaders(reader io.Reader) PageHeaders {
 
 	reader.Read(make([]byte, 1))
 
-	if pageType != LeafTablePageType {
-		log.Fatal("Page type is not LeafTablePageType")
+	if pageType != LeafTablePageType && pageType != InteriorTablePageType {
+		log.Fatal("Page type is not LeafTablePageType or InteriorTablePageType")
+	}
+
+	if pageType == InteriorTablePageType {
+		rightMostPageNumber = parseUint32(reader)
 	}
 
 	cellAddresses := make([]uint16, numberOfCells)
@@ -46,5 +53,6 @@ func parsePageHeaders(reader io.Reader) PageHeaders {
 		NumberOfCells:       numberOfCells,
 		StartOfCellsContent: startOfCellsContent,
 		CellAddresses:       cellAddresses,
+		RightMostPageNumber: rightMostPageNumber,
 	}
 }

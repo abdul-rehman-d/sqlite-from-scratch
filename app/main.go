@@ -6,7 +6,9 @@ import (
 	"os"
 	"strings"
 
+	"github.com/codecrafters-io/sqlite-starter-go/internal/dbfile"
 	"github.com/codecrafters-io/sqlite-starter-go/internal/sqlparser"
+	"github.com/codecrafters-io/sqlite-starter-go/internal/utils"
 )
 
 func main() {
@@ -41,16 +43,16 @@ func main() {
 	}
 }
 
-func dbinfo(dbFile *os.File) {
-	headers := parseDBHeaders(dbFile)
+func dbinfo(databaseFile *os.File) {
+	headers := dbfile.ParseDBHeaders(databaseFile)
 
-	pageHeaders := parsePageHeaders(dbFile)
+	pageHeaders := dbfile.ParsePageHeaders(databaseFile)
 
 	numberOfTables := 0
 
 	for _, cellAddress := range pageHeaders.CellAddresses {
-		dbFile.Seek(int64(cellAddress), 0)
-		cell := parseSchemaCell(dbFile)
+		databaseFile.Seek(int64(cellAddress), 0)
+		cell := parseSchemaCell(databaseFile)
 
 		if cell.Type == "table" {
 			numberOfTables++
@@ -61,16 +63,16 @@ func dbinfo(dbFile *os.File) {
 	fmt.Printf("number of tables: %v\n", numberOfTables)
 }
 
-func tables(dbFile *os.File) {
-	_ = parseDBHeaders(dbFile)
+func tables(databaseFile *os.File) {
+	_ = dbfile.ParseDBHeaders(databaseFile)
 
-	pageHeaders := parsePageHeaders(dbFile)
+	pageHeaders := dbfile.ParsePageHeaders(databaseFile)
 
 	flag := false
 
 	for _, cellAddress := range pageHeaders.CellAddresses {
-		dbFile.Seek(int64(cellAddress), 0)
-		cell := parseSchemaCell(dbFile)
+		databaseFile.Seek(int64(cellAddress), 0)
+		cell := parseSchemaCell(databaseFile)
 		if cell.Type == "table" {
 			if flag {
 				fmt.Printf(" ")
@@ -83,7 +85,7 @@ func tables(dbFile *os.File) {
 
 type Database struct {
 	File        *os.File
-	Headers     DBHeaders
+	Headers     dbfile.DBHeaders
 	Params      *sqlparser.SelectStatementResult
 	TableSchema *sqlparser.TableSchema
 	CountOnly   bool
@@ -96,9 +98,9 @@ func executeSQL(databaseFile *os.File, command string) {
 		log.Fatal(err)
 	}
 
-	headers := parseDBHeaders(databaseFile)
+	headers := dbfile.ParseDBHeaders(databaseFile)
 
-	pageHeaders := parsePageHeaders(databaseFile)
+	pageHeaders := dbfile.ParsePageHeaders(databaseFile)
 
 	countOnly := false
 
@@ -152,10 +154,10 @@ func (db *Database) ParsePage(pageNumber int64) {
 	offset := (int64(pageNumber) - 1) * int64(db.Headers.PageSize)
 
 	db.File.Seek(offset, 0)
-	pageHeaders := parsePageHeaders(db.File)
+	pageHeaders := dbfile.ParsePageHeaders(db.File)
 
 	switch pageHeaders.Type {
-	case InteriorTablePageType:
+	case dbfile.InteriorTablePageType:
 		for _, pageCellAddress := range pageHeaders.CellAddresses {
 			db.File.Seek(int64(offset), 0)
 			db.File.Seek(int64(pageCellAddress), 1)
@@ -164,7 +166,7 @@ func (db *Database) ParsePage(pageNumber int64) {
 			db.ParsePage(int64(pageCell.PageNumber))
 		}
 		db.ParsePage(int64(pageHeaders.RightMostPageNumber))
-	case LeafTablePageType:
+	case dbfile.LeafTablePageType:
 		for _, cellAddress := range pageHeaders.CellAddresses {
 			db.File.Seek(int64(offset), 0)
 			db.File.Seek(int64(cellAddress), 1)
@@ -199,7 +201,7 @@ func (db *Database) FilterAndPrintCell(cell Cell) {
 
 	if where := db.Params.Where; where != nil {
 		val := cell.Columns[where.ColumnName]
-		if !compareByteArrays(val, where.ValueToCompare) {
+		if !utils.CompareByteArrays(val, where.ValueToCompare) {
 			skip = true
 		}
 	}

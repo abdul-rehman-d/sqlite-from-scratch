@@ -1,6 +1,6 @@
-package main
+package utils
 
-func compareByteArrays(x, y []byte) bool {
+func CompareByteArrays(x, y []byte) bool {
 	if len(x) != len(y) {
 		return false
 	}

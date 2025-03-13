@@ -6,6 +6,7 @@ import (
 	"log"
 
 	"github.com/codecrafters-io/sqlite-starter-go/internal/sqlparser"
+	"github.com/codecrafters-io/sqlite-starter-go/internal/utils"
 )
 
 type SchemaCell struct {
@@ -18,26 +19,26 @@ type SchemaCell struct {
 }
 
 func parseSchemaCell(reader io.Reader) SchemaCell {
-	payloadSize := uint16(parseUint8(reader))
+	payloadSize := uint16(utils.ParseUint8(reader))
 
 	if payloadSize > 127 {
-		next := parseUint8(reader)
+		next := utils.ParseUint8(reader)
 		payloadSize += uint16(next)
 
 	}
 
-	_ = parseUint8(reader) // rowId skip
+	_ = utils.ParseUint8(reader) // rowId skip
 
-	recordHeaderSize := parseUint8(reader)
-	typeSize := normalizeOrSomething(parseUint8(reader))
-	nameSize := normalizeOrSomething(parseUint8(reader))
-	tableNameSize := normalizeOrSomething(parseUint8(reader))
-	_ = normalizeOrSomething(parseUint8(reader)) // rootPageSize
+	recordHeaderSize := utils.ParseUint8(reader)
+	typeSize := normalizeOrSomething(utils.ParseUint8(reader))
+	nameSize := normalizeOrSomething(utils.ParseUint8(reader))
+	tableNameSize := normalizeOrSomething(utils.ParseUint8(reader))
+	_ = normalizeOrSomething(utils.ParseUint8(reader)) // rootPageSize
 
 	// rest of record header is sql
 	sqlSize := 0
 	for i := 0; i < int(recordHeaderSize)-5; i++ {
-		t := int(parseUint8(reader))
+		t := int(utils.ParseUint8(reader))
 		sqlSize += t
 	}
 	sqlSize = normalizeOrSomethingInt(sqlSize)
@@ -55,7 +56,7 @@ func parseSchemaCell(reader io.Reader) SchemaCell {
 	reader.Read(nameBytes)
 	tableNameBytes := make([]byte, tableNameSize)
 	reader.Read(tableNameBytes)
-	rootPage := parseUint8(reader)
+	rootPage := utils.ParseUint8(reader)
 	sqlBytes := make([]byte, sqlSize)
 	reader.Read(sqlBytes)
 
@@ -75,48 +76,18 @@ type Cell struct {
 	Columns     map[string][]byte
 }
 
-func ReadVarint(r io.Reader) (uint64, int) {
-	var result uint64
-	var bytesRead int = 0
-
-	for i := 0; i < 9; i++ { // SQLite varints are at most 9 bytes
-		// Read a single byte
-		buf := make([]byte, 1)
-		r.Read(buf)
-
-		bytesRead++
-
-		b := buf[0]
-
-		// Extract lower 7 bits and shift into place
-		if i == 8 { // Last byte (9th byte) stores full 8 bits
-			result = (result << 8) | uint64(b)
-			break
-		} else {
-			result = (result << 7) | uint64(b&0x7F)
-		}
-
-		// If MSB is 0, stop reading (this was the last byte)
-		if b&0x80 == 0 {
-			break
-		}
-	}
-
-	return result, bytesRead
-}
-
 func parseCell(reader io.Reader, table sqlparser.TableSchema) Cell {
-	payloadSizeRaw, _ := ReadVarint(reader)
+	payloadSizeRaw, _ := utils.ReadVarint(reader)
 	payloadSize := int(payloadSizeRaw)
-	rowIdRaw, _ := ReadVarint(reader)
+	rowIdRaw, _ := utils.ReadVarint(reader)
 	rowId := int(rowIdRaw)
 
-	recordHeaderSize := parseUint8(reader)
+	recordHeaderSize := utils.ParseUint8(reader)
 
 	sizes := []uint64{}
 	recordHeadersByteRead := 0
 	for recordHeadersByteRead < int(recordHeaderSize)-1 {
-		size, bytesRead := ReadVarint(reader)
+		size, bytesRead := utils.ReadVarint(reader)
 		sizes = append(sizes, normalizeOrSomethingUint64(size))
 
 		recordHeadersByteRead += bytesRead
@@ -152,8 +123,8 @@ type InteriorTablePointerCell struct {
 
 func parseInteriorTableCell(reader io.Reader) InteriorTablePointerCell {
 	return InteriorTablePointerCell{
-		PageNumber: parseUint32(reader),
-		RowID:      parseUint16(reader),
+		PageNumber: utils.ParseUint32(reader),
+		RowID:      utils.ParseUint16(reader),
 	}
 }
 

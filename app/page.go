@@ -73,25 +73,16 @@ type Cell struct {
 	Columns     map[string][]byte
 }
 
-func readCellHeaderValue(reader io.Reader) int {
-	out := 0
-	for {
-		next := parseUint8(reader)
-		out += int(next)
-		if next <= 127 {
-			break
-		}
-	}
-	return out
-}
-
-func ReadVarint(r io.Reader) uint64 {
+func ReadVarint(r io.Reader) (uint64, int) {
 	var result uint64
+	var bytesRead int = 0
 
 	for i := 0; i < 9; i++ { // SQLite varints are at most 9 bytes
 		// Read a single byte
 		buf := make([]byte, 1)
 		r.Read(buf)
+
+		bytesRead++
 
 		b := buf[0]
 
@@ -109,18 +100,24 @@ func ReadVarint(r io.Reader) uint64 {
 		}
 	}
 
-	return result
+	return result, bytesRead
 }
 
 func parseCell(reader io.Reader, table TableSchema) Cell {
-	payloadSize := readCellHeaderValue(reader)
-	rowId := int(ReadVarint(reader))
+	payloadSizeRaw, _ := ReadVarint(reader)
+	payloadSize := int(payloadSizeRaw)
+	rowIdRaw, _ := ReadVarint(reader)
+	rowId := int(rowIdRaw)
 
 	recordHeaderSize := parseUint8(reader)
 
-	sizes := make([]byte, recordHeaderSize-1)
-	for i := 0; i < int(recordHeaderSize)-1; i++ {
-		sizes[i] = normalizeOrSomething(parseUint8(reader))
+	sizes := []uint64{}
+	recordHeadersByteRead := 0
+	for recordHeadersByteRead < int(recordHeaderSize)-1 {
+		size, bytesRead := ReadVarint(reader)
+		sizes = append(sizes, normalizeOrSomethingUint64(size))
+
+		recordHeadersByteRead += bytesRead
 	}
 
 	columns := make(map[string][]byte, recordHeaderSize-1)
@@ -156,6 +153,21 @@ func parseInteriorTableCell(reader io.Reader) InteriorTablePointerCell {
 		PageNumber: parseUint32(reader),
 		RowID:      parseUint16(reader),
 	}
+}
+
+func normalizeOrSomethingUint64(val uint64) uint64 {
+	if val%2 == 0 {
+		if val > 12 {
+			val -= 12
+			val = val / 2
+		}
+	} else {
+		if val > 13 {
+			val -= 13
+			val = val / 2
+		}
+	}
+	return val
 }
 
 func normalizeOrSomethingInt(size int) int {

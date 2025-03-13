@@ -18,7 +18,7 @@ type SelectStatementResult struct {
 	TableName  string
 	Columns    []string
 	AllColumns bool
-	Where      []Where
+	Where      *Where
 }
 
 func parseSelectStatement(stmt sqlparser.Statement) (*SelectStatementResult, error) {
@@ -53,14 +53,14 @@ func parseSelectStatement(stmt sqlparser.Statement) (*SelectStatementResult, err
 		}
 	}
 
-	wheres := []Where{}
+	var where Where
 
 	if selectStmt.Where != nil {
 		compare, ok := selectStmt.Where.Expr.(*sqlparser.ComparisonExpr)
 		if !ok {
 			return nil, fmt.Errorf("can only do comparison rn")
 		}
-		where := Where{}
+		where = Where{}
 		if val, ok := extractSQLLiteralValue(compare.Left); ok {
 			where.ValueToCompare = val
 		} else {
@@ -81,15 +81,13 @@ func parseSelectStatement(stmt sqlparser.Statement) (*SelectStatementResult, err
 		if compare.Operator != "=" {
 			return nil, fmt.Errorf("only = operator allowed")
 		}
-
-		wheres = append(wheres, where)
 	}
 
 	return &SelectStatementResult{
 		TableName:  tableNameOut,
 		Columns:    columns,
 		AllColumns: allColumns,
-		Where:      wheres,
+		Where:      &where,
 	}, nil
 }
 

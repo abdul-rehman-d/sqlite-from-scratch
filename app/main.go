@@ -206,12 +206,10 @@ func validateAllColumnNames(params *SelectStatementResult, tableSchema *TableSch
 func (db *Database) FilterAndPrintCell(cell Cell) {
 	skip := false
 
-	for _, where := range db.Params.Where {
+	if where := db.Params.Where; where != nil {
 		val := cell.Columns[where.ColumnName]
 		if !compareByteArrays(val, where.ValueToCompare) {
 			skip = true
-			break
-
 		}
 	}
 

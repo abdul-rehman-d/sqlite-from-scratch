@@ -6,7 +6,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/xwb1989/sqlparser"
+	"github.com/codecrafters-io/sqlite-starter-go/internal/sqlparser"
 )
 
 func main() {
@@ -84,23 +84,14 @@ func tables(dbFile *os.File) {
 type Database struct {
 	File        *os.File
 	Headers     DBHeaders
-	Params      *SelectStatementResult
-	TableSchema *TableSchema
+	Params      *sqlparser.SelectStatementResult
+	TableSchema *sqlparser.TableSchema
 	CountOnly   bool
 	Count       uint64
 }
 
 func executeSQL(databaseFile *os.File, command string) {
-	stmt, err := sqlparser.Parse(command)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	if _, ok := stmt.(*sqlparser.Select); !ok {
-		log.Fatal("no commands but `select` is supported yet")
-	}
-
-	params, err := parseSelectStatement(stmt)
+	params, err := sqlparser.ParseSelectStatement(command)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -130,7 +121,7 @@ func executeSQL(databaseFile *os.File, command string) {
 		log.Fatal("Table not found")
 	}
 
-	tableSchema, err := parseTableSchema(tableCell.SQL)
+	tableSchema, err := sqlparser.ParseTableSchema(tableCell.SQL)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -184,7 +175,7 @@ func (db *Database) ParsePage(pageNumber int64) {
 	}
 }
 
-func validateAllColumnNames(params *SelectStatementResult, tableSchema *TableSchema) error {
+func validateAllColumnNames(params *sqlparser.SelectStatementResult, tableSchema *sqlparser.TableSchema) error {
 	if params.AllColumns {
 		return nil
 	}

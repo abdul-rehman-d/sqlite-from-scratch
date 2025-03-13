@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"io"
 	"log"
+
+	"github.com/codecrafters-io/sqlite-starter-go/internal/sqlparser"
 )
 
 type SchemaCell struct {
@@ -103,7 +105,7 @@ func ReadVarint(r io.Reader) (uint64, int) {
 	return result, bytesRead
 }
 
-func parseCell(reader io.Reader, table TableSchema) Cell {
+func parseCell(reader io.Reader, table sqlparser.TableSchema) Cell {
 	payloadSizeRaw, _ := ReadVarint(reader)
 	payloadSize := int(payloadSizeRaw)
 	rowIdRaw, _ := ReadVarint(reader)

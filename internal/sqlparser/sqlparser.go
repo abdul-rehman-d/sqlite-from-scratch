@@ -1,4 +1,4 @@
-package main
+package sqlparser
 
 import (
 	"fmt"
@@ -21,11 +21,17 @@ type SelectStatementResult struct {
 	Where      *Where
 }
 
-func parseSelectStatement(stmt sqlparser.Statement) (*SelectStatementResult, error) {
+func ParseSelectStatement(query string) (*SelectStatementResult, error) {
 	tableNameOut := ""
-
 	columns := []string{}
 	allColumns := false
+
+	query = PreprocessSQL(query)
+
+	stmt, err := sqlparser.Parse(query)
+	if err != nil {
+		return nil, err
+	}
 
 	selectStmt, ok := stmt.(*sqlparser.Select)
 	if !ok {
@@ -61,12 +67,12 @@ func parseSelectStatement(stmt sqlparser.Statement) (*SelectStatementResult, err
 			return nil, fmt.Errorf("can only do comparison rn")
 		}
 		where = Where{}
-		if val, ok := extractSQLLiteralValue(compare.Left); ok {
+		if val, ok := ExtractSQLLiteralValue(compare.Left); ok {
 			where.ValueToCompare = val
 		} else {
 			where.ColumnName = sqlparser.String(compare.Left)
 		}
-		if val, ok := extractSQLLiteralValue(compare.Right); ok {
+		if val, ok := ExtractSQLLiteralValue(compare.Right); ok {
 			if where.ValueToCompare != nil {
 				return nil, fmt.Errorf("only column to value compare allowed")
 			}
@@ -102,8 +108,8 @@ type TableSchema struct {
 	Columns   []Column
 }
 
-func parseTableSchema(query string) (*TableSchema, error) {
-	query = preprocessSQL(query)
+func ParseTableSchema(query string) (*TableSchema, error) {
+	query = PreprocessSQL(query)
 	stmt, err := sqlparser.Parse(query)
 	if err != nil {
 		return nil, err
@@ -132,7 +138,7 @@ func parseTableSchema(query string) (*TableSchema, error) {
 	}, nil
 }
 
-func preprocessSQL(sql string) string {
+func PreprocessSQL(sql string) string {
 	reAutoInc := regexp.MustCompile(`(?i)\b autoincrement\b`)
 	sql = reAutoInc.ReplaceAllString(sql, "")
 
@@ -142,7 +148,7 @@ func preprocessSQL(sql string) string {
 	return sql
 }
 
-func extractSQLLiteralValue(expr sqlparser.Expr) ([]byte, bool) {
+func ExtractSQLLiteralValue(expr sqlparser.Expr) ([]byte, bool) {
 	if sqlVal, ok := expr.(*sqlparser.SQLVal); ok {
 		return sqlVal.Val, true
 	}

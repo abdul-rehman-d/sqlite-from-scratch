@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/codecrafters-io/sqlite-starter-go/internal/db"
 	"github.com/codecrafters-io/sqlite-starter-go/internal/dbfile"
 	"github.com/codecrafters-io/sqlite-starter-go/internal/sqlparser"
 	"github.com/codecrafters-io/sqlite-starter-go/internal/utils"
@@ -30,12 +31,14 @@ func main() {
 		return
 	}
 
+	db := db.NewDB(databaseFile)
+
 	switch command {
 	case ".dbinfo":
-		dbinfo(databaseFile)
+		dbinfo(db)
 
 	case ".tables":
-		tables(databaseFile)
+		tables(db)
 
 	default:
 		fmt.Println("Unknown command", command)
@@ -43,42 +46,16 @@ func main() {
 	}
 }
 
-func dbinfo(databaseFile *os.File) {
-	headers := dbfile.ParseDBHeaders(databaseFile)
-
-	pageHeaders := dbfile.ParsePageHeaders(databaseFile)
-
-	numberOfTables := 0
-
-	for _, cellAddress := range pageHeaders.CellAddresses {
-		databaseFile.Seek(int64(cellAddress), 0)
-		cell := parseSchemaCell(databaseFile)
-
-		if cell.Type == "table" {
-			numberOfTables++
-		}
-	}
-
-	fmt.Printf("database page size: %v\n", headers.PageSize)
-	fmt.Printf("number of tables: %v\n", numberOfTables)
+func dbinfo(db *db.DB) {
+	fmt.Printf("database page size: %v\n", db.Headers.PageSize)
+	fmt.Printf("number of tables: %v\n", len(db.Tables))
 }
 
-func tables(databaseFile *os.File) {
-	_ = dbfile.ParseDBHeaders(databaseFile)
-
-	pageHeaders := dbfile.ParsePageHeaders(databaseFile)
-
-	flag := false
-
-	for _, cellAddress := range pageHeaders.CellAddresses {
-		databaseFile.Seek(int64(cellAddress), 0)
-		cell := parseSchemaCell(databaseFile)
-		if cell.Type == "table" {
-			if flag {
-				fmt.Printf(" ")
-			}
-			fmt.Printf("%v", cell.TableName)
-			flag = true
+func tables(db *db.DB) {
+	for i, table := range db.Tables {
+		fmt.Print(table.Name)
+		if i != len(db.Tables)-1 {
+			fmt.Print(" ")
 		}
 	}
 }
